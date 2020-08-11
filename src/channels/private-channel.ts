@@ -5,27 +5,19 @@ import { Log } from './../log';
 
 export class PrivateChannel {
     /**
-     * Request client.
-     *
-     * @type {any}
-     */
-    private request: any;
-
-    /**
      * Create a new private channel instance.
-     *
-     * @param {any} options
      */
     constructor(private options: any) {
         this.request = request;
     }
 
     /**
+     * Request client.
+     */
+    private request: any;
+
+    /**
      * Send authentication request to application server.
-     *
-     * @param  {any} socket
-     * @param  {any} data
-     * @return {Promise<any>}
      */
     authenticate(socket: any, data: any): Promise<any> {
         let options = {
@@ -35,60 +27,57 @@ export class PrivateChannel {
             rejectUnauthorized: false
         };
 
+        if (this.options.devMode) {
+            Log.info(`[${new Date().toLocaleTimeString()}] - Sending auth request to: ${options.url}\n`);
+        }
+
         return this.serverRequest(socket, options);
     }
 
     /**
      * Get the auth host based on the Socket.
-     *
-     * @param {any} socket
-     * @return {string}
      */
     protected authHost(socket: any): string {
-		let authHosts = (this.options.authHost) ?
-			this.options.authHost : this.options.host;
+        let authHosts = (this.options.authHost) ?
+            this.options.authHost : this.options.host;
 
-		if (typeof authHosts === "string") {
-			authHosts = [authHosts];
-		}
+        if (typeof authHosts === "string") {
+            authHosts = [authHosts];
+        }
 
-		let authHostSelected = authHosts[0] || 'http://localhost';
+        let authHostSelected = authHosts[0] || 'http://localhost';
 
-		if(socket.request.headers.referer) {
-			let referer = url.parse(socket.request.headers.referer);
+        if (socket.request.headers.referer) {
+            let referer = url.parse(socket.request.headers.referer);
 
-			for (let authHost of authHosts) {
-				authHostSelected = authHost;
-	
-				if (this.hasMatchingHost(referer, authHost)) {
-					authHostSelected = `${referer.protocol}//${referer.host}`;
-					break;
-				}
-			};
-		}
+            for (let authHost of authHosts) {
+                authHostSelected = authHost;
+
+                if (this.hasMatchingHost(referer, authHost)) {
+                    authHostSelected = `${referer.protocol}//${referer.host}`;
+                    break;
+                }
+            };
+        }
+
+        if (this.options.devMode) {
+            Log.error(`[${new Date().toLocaleTimeString()}] - Preparing authentication request to: ${authHostSelected}`);
+        }
 
         return authHostSelected;
     }
 
     /**
      * Check if there is a matching auth host.
-     *
-     * @param  {any}  referer
-     * @param  {any}  host
-     * @return {boolean}
      */
     protected hasMatchingHost(referer: any, host: any): boolean {
-        return referer.hostname.substr(referer.hostname.indexOf('.')) === host ||
+        return (referer.hostname && referer.hostname.substr(referer.hostname.indexOf('.')) === host) ||
             `${referer.protocol}//${referer.host}` === host ||
             referer.host === host;
     }
 
     /**
      * Send a request to the server.
-     *
-     * @param  {any} socket
-     * @param  {any} options
-     * @return {Promise<any>}
      */
     protected serverRequest(socket: any, options: any): Promise<any> {
         return new Promise<any>((resolve, reject) => {
@@ -99,9 +88,8 @@ export class PrivateChannel {
                 if (error) {
                     if (this.options.devMode) {
                         Log.error(`[${new Date().toLocaleTimeString()}] - Error authenticating ${socket.id} for ${options.form.channel_name}`);
+                        Log.error(error);
                     }
-
-                    Log.error(error);
 
                     reject({ reason: 'Error sending authentication request.', status: 0 });
                 } else if (response.statusCode !== 200) {
@@ -130,13 +118,9 @@ export class PrivateChannel {
 
     /**
      * Prepare headers for request to app server.
-     *
-     * @param  {any} socket
-     * @param  {any} options
-     * @return {any}
      */
     protected prepareHeaders(socket: any, options: any): any {
-        options.headers['Cookie'] = socket.request.headers.cookie;
+        options.headers['Cookie'] = options.headers['Cookie'] || socket.request.headers.cookie;
         options.headers['X-Requested-With'] = 'XMLHttpRequest';
 
         return options.headers;

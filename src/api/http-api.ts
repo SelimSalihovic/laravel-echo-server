@@ -20,6 +20,11 @@ export class HttpApi {
         this.corsMiddleware();
 
         this.express.get(
+            '/',
+            (req, res) => this.getRoot(req, res),
+        );
+
+        this.express.get(
             '/apps/:appId/status',
             (req, res) => this.getStatus(req, res)
         );
@@ -52,6 +57,16 @@ export class HttpApi {
                 next();
             });
         }
+    }
+
+    /**
+     * Outputs a simple message to show that the server is running.
+     *
+     * @param {any} req
+     * @param {any} res
+     */
+    getRoot(req: any, res: any): void {
+        res.send('OK');
     }
 
     /**
@@ -146,7 +161,7 @@ export class HttpApi {
             let users = [];
 
             _.uniqBy(members, 'user_id').forEach((member: any) => {
-                users.push({ id: member.user_id });
+                users.push({ id: member.user_id, user_info: member.user_info });
             });
 
             res.json({ users: users });

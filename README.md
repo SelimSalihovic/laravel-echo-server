@@ -1,4 +1,4 @@
-﻿# Laravel Echo Server
+# Laravel Echo Server
 
 NodeJs server for Laravel Echo broadcasting with Socket.io.
 
@@ -18,9 +18,7 @@ official docs: <https://laravel.com/docs/master/broadcasting>
 Install npm package globally with the following command:
 
 ``` shell
-
 $   npm install -g laravel-echo-server
-
 ```
 
 ### Initialize with CLI Tool
@@ -65,6 +63,14 @@ in your project root directory, run
 $ laravel-echo-server start
 ```
 
+#### Stop The Server
+
+in your project root directory, run
+
+``` shell
+$ laravel-echo-server stop
+```
+
 ### Configurable Options
 
 Edit the default configuration of the server by adding options to your **laravel-echo-server.json** file.
@@ -72,19 +78,39 @@ Edit the default configuration of the server by adding options to your **laravel
 
 | Title              | Default              | Description                 |
 | :------------------| :------------------- | :---------------------------|
+| `apiOriginAllow`   | `{}`                 | Configuration to allow API be accessed over CORS. [Example](#cross-domain-access-to-api) |
 | `authEndpoint`     | `/broadcasting/auth` | The route that authenticates private channels  |
 | `authHost`         | `http://localhost`   | The host of the server that authenticates private and presence channels  |
 | `database`         | `redis`              | Database used to store data that should persist, like presence channel members. Options are currently `redis` and `sqlite` |
-| `databaseConfig`   |  `{}`                | Configurations for the different database drivers [Example](#database)|
+| `databaseConfig`   |  `{}`                | Configurations for the different database drivers [Example](#database) |
+| `devMode`          | `false`              | Adds additional logging for development purposes |
 | `host`             | `null`               | The host of the socket.io server ex.`app.dev`. `null` will accept connections on any IP-address |
 | `port`             | `6001`               | The port that the socket.io server should run on |
-| `protocol`         | `http`               | either `http` or `https` |
+| `protocol`         | `http`               | Must be either `http` or `https` |
 | `sslCertPath`      | `''`                 | The path to your server's ssl certificate |
 | `sslKeyPath`       | `''`                 | The path to your server's ssl key |
 | `sslCertChainPath` | `''`                 | The path to your server's ssl certificate chain |
 | `sslPassphrase`    | `''`                 | The pass phrase to use for the certificate (if applicable) |
 | `socketio`         | `{}`                 | Options to pass to the socket.io instance ([available options](https://github.com/socketio/engine.io#methods-1)) |
-| `apiOriginAllow`   | `{}`                 | Configuration to allow API be accessed over CORS. [Example](#cross-domain-access-to-api)|
+| `subscribers`      | `{"http": true, "redis": true}` | Allows to disable subscribers individually. Available subscribers: `http` and `redis` |
+
+### DotEnv
+If a .env file is found in the same directory as the laravel-echo-server.json
+file, the following options can be overridden:
+
+- `authHost`: `LARAVEL_ECHO_SERVER_AUTH_HOST` *Note*: This option will fall back to the `LARAVEL_ECHO_SERVER_HOST` option as the default if that is set in the .env file.
+- `host`: `LARAVEL_ECHO_SERVER_HOST`
+- `port`: `LARAVEL_ECHO_SERVER_PORT`
+- `devMode`: `LARAVEL_ECHO_SERVER_DEBUG`
+- `databaseConfig.redis.host`: `LARAVEL_ECHO_SERVER_REDIS_HOST`
+- `databaseConfig.redis.port`: `LARAVEL_ECHO_SERVER_REDIS_PORT`
+- `databaseConfig.redis.password`: `LARAVEL_ECHO_SERVER_REDIS_PASSWORD`
+- `protocol`: `LARAVEL_ECHO_SERVER_PROTO`
+- `sslKeyPath`: `LARAVEL_ECHO_SERVER_SSL_KEY`
+- `sslCertPath`: `LARAVEL_ECHO_SERVER_SSL_CERT`
+- `sslPassphrase`: `LARAVEL_ECHO_SERVER_SSL_PASS`
+- `sslCertChainPath`: `LARAVEL_ECHO_SERVER_SSL_CHAIN`
+
 
 ### Running with SSL
 
@@ -93,6 +119,33 @@ Edit the default configuration of the server by adding options to your **laravel
 *   The server configuration should include paths to both your ssl certificate and key located on your server.
 
 *Note: This library currently only supports serving from either http or https, not both.*
+
+#### Alternative SSL implementation
+If you are struggling to get SSL implemented with this package, you could look at using a proxy module within Apache or NginX. Essentially, instead of connecting your websocket traffic to https://yourserver.dev:6001/socket.io?..... and trying to secure it, you can connect your websocket traffic to https://yourserver.dev/socket.io. Behind the scenes, the proxy module of Apache or NginX will be configured to intercept requests for /socket.io, and internally redirect those to your echo server over non-ssl on port 6001. This keeps all of the traffic encrypted between browser and web server, as your web server will still do the SSL encryption/decryption. The only thing that is left unsecured is the traffic between your webserver and your Echo server, which might be acceptable in many cases.
+##### Sample NginX proxy config
+```
+#the following would go within the server{} block of your web server config
+location /socket.io {
+	    proxy_pass http://laravel-echo-server:6001; #could be localhost if Echo and NginX are on the same box
+	    proxy_http_version 1.1;
+	    proxy_set_header Upgrade $http_upgrade;
+	    proxy_set_header Connection "Upgrade";
+	}
+```
+
+#### Sample Apache proxy config
+
+```
+RewriteCond %{REQUEST_URI}  ^/socket.io            [NC]
+RewriteCond %{QUERY_STRING} transport=websocket    [NC]
+RewriteRule /(.*)           ws://localhost:6001/$1 [P,L]
+
+ProxyPass        /socket.io http://localhost:6001/socket.io
+ProxyPassReverse /socket.io http://localhost:6001/socket.io
+```
+
+### Setting the working directory
+The working directory in which `laravel-echo-server` will look for the configuration file `laravel-echo-server.json` can be passed to the `start` command through the `--dir` parameter like so: `laravel-echo-server start --dir=/var/www/html/example.com/configuration`
 
 ## Subscribers
 The Laravel Echo Server subscribes to incoming events with two methods: Redis & Http.
@@ -146,6 +199,7 @@ The HTTP subscriber is compatible with the Laravel Pusher subscriber. Just confi
     'options' => [
         'host' => 'localhost',
         'port' => 6001,
+        'scheme' => 'http'
     ],
 ],
 ```
@@ -212,7 +266,8 @@ For example, if you wanted to pass a custom configuration to Redis:
   "databaseConfig" : {
     "redis" : {
       "port": "3001",
-      "host": "redis.app.dev"
+      "host": "redis.app.dev",
+      "keyPrefix": "my-redis-prefix"
     }
   }
 }
@@ -222,8 +277,35 @@ For example, if you wanted to pass a custom configuration to Redis:
 
 *A full list of Redis options can be found [here](https://github.com/luin/ioredis/blob/master/API.md#new-redisport-host-options).*
 
+### Redis sentinel
+For example, if you wanted to use redis-sentinel, you need to pass a custom configuration : 
+
+``` json
+ "databaseConfig": {
+     "redis": {
+       "sentinels": [
+         {
+           "host": "redis-sentinel-0",
+           "port": 26379
+         },
+         {
+            "host": "redis-sentinel-1",
+            "port": 26379
+         }
+         {
+           "host": "redis-sentinel-2",
+           "port": 26379
+         }
+       ],
+       "name": "mymaster",
+       "sentinelPassword": "redis-password"
+     },
+   },
+ ``` 
+*For more information about redis sentinel configuration you can check [this](https://github.com/luin/ioredis#sentinel)*
 ### SQLite
-With SQLite you may be interested in changing the path where the database is stored:
+
+With SQLite you may be interested in changing the path where the database is stored.
 
 ``` json
 {
@@ -235,7 +317,9 @@ With SQLite you may be interested in changing the path where the database is sto
 }
 ```
 
-***Note: [node-sqlite3](https://github.com/mapbox/node-sqlite3) is required for this database. Please install before using.***
+***Note 1:*** The path is relative to the root of your application, not your system.
+
+***Note 2:*** [node-sqlite3](https://github.com/mapbox/node-sqlite3) is required for this database. Please install before using.
 
 ```
 npm install sqlite3 -g
@@ -246,6 +330,28 @@ npm install sqlite3 -g
 When users join a presence channel, their presence channel authentication data is stored using Redis.
 
 While presence channels contain a list of users, there will be instances where a user joins a presence channel multiple times. For example, this would occur when opening multiple browser tabs. In this situation "joining" and "leaving" events are only emitted to the first and last instance of the user.
+
+Optionally, you can configure laravel-echo-server to publish an event on each update to a presence channel, by setting `databaseConfig.publishPresence` to `true`:
+
+```json
+{
+  "database": "redis",
+  "databaseConfig": {
+    "redis" : {
+      "port": "6379",
+      "host": "localhost"
+    },
+    "publishPresence": true
+  }
+}
+```
+You can use Laravel's Redis integration, to trigger Application code from there:
+```php
+Redis::subscribe(['PresenceChannelUpdated'], function ($message) {
+    var_dump($message);
+});
+```
+
 
 ## Client Side Configuration
 
@@ -262,13 +368,6 @@ add a script tag to your html like so:
 
 _Note: When using the socket.io client library from your running server, remember to check that the `io` global variable is defined before subscribing to events._
 
-#### Better performance with [µWebSockets](https://github.com/uWebSockets/uWebSockets)
-For extra performance, you can use the faster `uws` engine instead of `ws`, by setting the `wsEngine` option for Socket.IO in `laravel-echo-server.json`:
+#### µWebSockets deprecation
 
-```js
-"socketio": {
-    "wsEngine": "uws"
-}
-```
-
-See <https://github.com/uWebSockets/uWebSockets> for more information.
+µWebSockets has been [officially deprecated](https://www.npmjs.com/package/uws). Currently there is no support for µWebSockets in Socket.IO, but it may have the new [ClusterWS](https://www.npmjs.com/package/@clusterws/cws) support incoming. Meanwhile Laravel Echo Server will use [`ws` engine](https://www.npmjs.com/package/ws) by default until there is another option.
