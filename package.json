@@ -37,9 +37,7 @@
   "devDependencies": {
     "@types/lodash": "^4.14.149",
     "@types/node": "^13.9.1",
-    "typescript": "^3.8.3"
-  },
-  "peerDependecies": {
+    "typescript": "^3.8.3",
     "sqlite3": "^3.1.13"
   },
   "bin": {
